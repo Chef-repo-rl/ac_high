@@ -26,5 +26,5 @@ pipeline {
                 sh "berks install && berks upload"
             }
         }
-        
+    }  
 }
