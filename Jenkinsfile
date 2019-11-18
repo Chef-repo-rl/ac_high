@@ -8,7 +8,12 @@ pipeline {
         }
         stage('cookstyle') {
             steps {
+            try {
                 sh "cookstyle -a"
+            } catch (Exception e) {
+            status = -1
+            }
+
             }
         }
         stage('kitchen test') {

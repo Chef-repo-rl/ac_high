@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 class Pam < Inspec.resource(1)
   # These are aliases for one another
   attr_reader :rules, :lines
@@ -65,9 +63,7 @@ class Pam < Inspec.resource(1)
     @lines         = @rules
 
     @top_config = false
-    if path.strip == '/etc/pam.conf'
-      @top_config = true
-    end
+    @top_config = true if path.strip == '/etc/pam.conf'
 
     parse_content(config_target)
   end
@@ -81,45 +77,41 @@ class Pam < Inspec.resource(1)
     config_files = Array(path)
 
     if path.directory?
-      config_files = inspec.bash("ls #{path}/*").stdout.lines.map{|f| inspec.file(f.strip) }
+      config_files = inspec.bash("ls #{path}/*").stdout.lines.map { |f| inspec.file(f.strip) }
     end
 
     config_files.each do |config_file|
       next unless config_file.content
 
       # Support multi-line continuance and skip all comments and blank lines
-      rules = config_file.content.gsub("\\\n",' ').lines.map(&:strip).delete_if do |line|
-        line  =~ /^(\s*#.*|\s*)$/
+      rules = config_file.content.gsub("\\\n", ' ').lines.map(&:strip).delete_if do |line|
+        line =~ /^(\s*#.*|\s*)$/
       end
 
       service = service_name
-      unless service || @top_config
-        service = config_file.basename
-      end
+      service = config_file.basename unless service || @top_config
 
       rules.each do |rule|
-        new_rule = Pam::Rule.new(rule, {:service_name => service})
+        new_rule = Pam::Rule.new(rule, service_name: service)
 
         # If we hit an 'include' or 'substack' statement, we need to derail and
         # delve down that tail until we hit the end
         #
         # There's no recursion checking here but, if you have a recursive PAM
         # stack, you're probably not logging into your system anyway
-        if ['include','substack'].include?(new_rule.control)
+        if %w(include substack).include?(new_rule.control)
           # Support full path specification includes
-          if new_rule.module_path[0].chr == '/'
-            subtarget = inspec.file(new_rule.module_path)
-          else
-            if File.directory?(path.path)
-              subtarget = inspec.file(File.join(path.path, new_rule.module_path))
-            else
-              subtarget = inspec.file(File.join(File.dirname(path.path), new_rule.module_path))
-            end
-          end
+          subtarget = if new_rule.module_path[0].chr == '/'
+                        inspec.file(new_rule.module_path)
+                      else
+                        subtarget = if File.directory?(path.path)
+                                      inspec.file(File.join(path.path, new_rule.module_path))
+                                    else
+                                      inspec.file(File.join(File.dirname(path.path), new_rule.module_path))
+                                    end
+                      end
 
-          if subtarget.exist?
-            parse_content(subtarget, service)
-          end
+          parse_content(subtarget, service) if subtarget.exist?
         else
 
           unless new_rule.type && new_rule.control && new_rule.module_path
@@ -167,11 +159,11 @@ class Pam < Inspec.resource(1)
     end
 
     def services
-      self.collect{|l| l.service}.sort.uniq
+      collect(&:service).sort.uniq
     end
 
     def service
-      svcs = self.collect{|l| l.service}.sort.uniq
+      svcs = collect(&:service).sort.uniq
       if svcs.length > 1
         raise PamError, %(More than one service found: '[#{svcs.join("', '")}]')
       end
@@ -179,27 +171,27 @@ class Pam < Inspec.resource(1)
       svcs.first
     end
 
-    def first?(rule, opts={:service_name => nil})
+    def first?(rule, opts = { service_name: nil })
       raise PamError, 'opts must be a hash' unless opts.is_a?(Hash)
 
       service_name = get_service_name(opts[:service_name])
 
-      _rule = Pam::Rule.new(rule, {:service_name => service_name})
+      _rule = Pam::Rule.new(rule, service_name: service_name)
 
       rules_of_type(_rule.type, opts).first == _rule
     end
 
-    def last?(rule, opts={:service_name => nil})
+    def last?(rule, opts = { service_name: nil })
       raise PamError, 'opts must be a hash' unless opts.is_a?(Hash)
 
       service_name = get_service_name(opts[:service_name])
 
-      _rule = Pam::Rule.new(rule, {:service_name => service_name})
+      _rule = Pam::Rule.new(rule, service_name: service_name)
 
       rules_of_type(_rule.type, opts).last == _rule
     end
 
-    def rules_of_type(rule_type, opts={:service_name => nil})
+    def rules_of_type(rule_type, opts = { service_name: nil })
       raise PamError, 'opts must be a hash' unless opts.is_a?(Hash)
 
       service_name = get_service_name(opts[:service_name])
@@ -224,12 +216,12 @@ class Pam < Inspec.resource(1)
     # @option opts [String] :service_name The PAM Service under which the rules
     #   should be searched
     # @return [Boolean] true if found, false otherwise
-    def include?(rules, opts={:exact => false, :service_name => nil})
+    def include?(rules, opts = { exact: false, service_name: nil })
       raise PamError, 'opts must be a hash' unless opts.is_a?(Hash)
 
       service_name = get_service_name(opts[:service_name])
 
-      rules = Array(rules).map{|l| Pam::Rule.new(l, {:service_name => service_name})}
+      rules = Array(rules).map { |l| Pam::Rule.new(l, service_name: service_name) }
 
       retval = false
 
@@ -245,24 +237,24 @@ class Pam < Inspec.resource(1)
         end
       else
         # This match allows other rules between the two in question
-        retval = (rules.select{|l| super(l)} == rules)
+        retval = (rules.select { |l| super(l) } == rules)
       end
 
-      return retval
+      retval
     end
-    alias_method :match, :include?
+    alias match include?
 
     # An alias for setting `:exact => true` in the `include` method
-    def include_exactly?(rules, opts={})
-      include?(rules, opts.merge({:exact => true}))
+    def include_exactly?(rules, opts = {})
+      include?(rules, opts.merge(exact: true))
     end
-    alias_method :match_exactly, :include_exactly?
+    alias match_exactly include_exactly?
 
     # Convert the data structure to an Array suitable for an RSpec diff
     #
     # @return [Array[String]]
     def to_a
-      self.sort_by{|l| l.type}.map{|l| l.to_s}
+      sort_by(&:type).map(&:to_s)
     end
 
     # Convert the data structure to a String
@@ -300,7 +292,7 @@ class Pam < Inspec.resource(1)
     attr_reader :service, :silent, :type, :control, :module_path, :module_arguments
 
     def initialize(rule, opts = {})
-      @to_s = rule.strip.gsub(/\s+/,' ')
+      @to_s = rule.strip.gsub(/\s+/, ' ')
 
       rule_regex = <<-'EOM'
         # Start of Rule
@@ -346,7 +338,7 @@ class Pam < Inspec.resource(1)
     end
 
     def match?(to_cmp)
-      to_cmp = Pam::Rule.new(to_cmp, {:service_name => @service}) if to_cmp.is_a?(String)
+      to_cmp = Pam::Rule.new(to_cmp, service_name: @service) if to_cmp.is_a?(String)
 
       # The simple match first
       self.class == to_cmp.class &&
@@ -363,7 +355,7 @@ class Pam < Inspec.resource(1)
             end
         )
     end
-    alias_method :==, :match?
-    alias_method :eql?, :==
+    alias == match?
+    alias eql? ==
   end
 end
