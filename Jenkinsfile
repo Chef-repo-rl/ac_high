@@ -20,12 +20,12 @@ pipeline {
         }
         stage('kitchen test') {
             steps {
-                sh "kitchen converge"
+                sh "sudo kitchen converge"
             }
         }
         stage('inspec test') {
             steps {
-                sh "kitchen verify"
+                sh "sudo kitchen verify"
             }
         }
         stage('berks upload') {
