@@ -30,7 +30,7 @@ pipeline {
         }
         stage('berks upload') {
             steps {
-                sh "berks install && berks upload"
+                sh "sudo berks install && sudo berks upload"
             }
         }
     }  
