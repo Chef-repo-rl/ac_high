@@ -1,10 +1,10 @@
 # ac_high
 
-
 [![Build
 Status](https://travis-ci.org/sitle/chef-alfresco.svg?branch=develop)](https://travis-ci.org/sitle/chef-alfresco)
 
 This cookbook install and configure [Alfresco](http://www.alfresco.com/). It is heavily based on the excellent work of [loftuxab](https://github.com/loftuxab/alfresco-ubuntu-install).
+
 
 ## Supported Platforms
 
